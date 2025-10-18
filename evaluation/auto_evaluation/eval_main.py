@@ -45,7 +45,7 @@ class EvaluationHarness:
         self.reranker_base_url = reranker_base_url
         self.qns = preprocess.read_data(self.dataset)
         self.eval_model = GeminiModel(
-            model_name="gemini-1.5-pro-002",
+            model_name="gemini-2.5-pro",
             project=os.getenv("GOOGLE_PROJECT_ID", ""),
             location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
         )
@@ -81,7 +81,7 @@ class EvaluationHarness:
                 continue
         raise ValueError("Sanity check failed after timeout")
 
-    def evaluate(self, retriever: str):
+    def evaluate(self, retriever: str, limit: int | None = None):
         retrieval_tcs = []
         response_times = []
 
@@ -93,7 +93,8 @@ class EvaluationHarness:
         )
 
         # retrieval test cases
-        for i, qa_pair in enumerate(tqdm(self.qns, desc="Evaluating")):
+        questions = self.qns[:limit] if limit else self.qns
+        for i, qa_pair in enumerate(tqdm(questions, desc="Evaluating")):
             question, ground_truth = qa_pair["question"], qa_pair["ground_truth"]
             response, response_time = self.query(retriever, question)
             response_text = response["response"]
@@ -114,7 +115,6 @@ class EvaluationHarness:
         evaluate(
             test_cases=retrieval_tcs,
             metrics=[precision, recall, hallucination],
-            print_results=False,
         )
 
         # parse deepeval results
@@ -155,6 +155,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--dataset", type=str, help="Path to dataset to evaluate on")
     parser.add_argument("--retriever", type=str, help="Retriever to evaluate on")
+    parser.add_argument(
+        "--limit", type=int, help="Limit number of questions to evaluate", default=None
+    )
     args = parser.parse_args()
 
     # Pull the dataset from huggingface hub
@@ -162,4 +165,4 @@ if __name__ == "__main__":
 
     # Evaluate the model on the dataset
     harness = EvaluationHarness(args.base_url, args.dataset, args.reranker_base_url)
-    harness.evaluate(args.retriever)
+    harness.evaluate(args.retriever, limit=args.limit)
